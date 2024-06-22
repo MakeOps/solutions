@@ -39,10 +39,11 @@ export class SimpleAudioVideoTranscriptionOnAwsStack extends cdk.Stack {
       service: 'transcribe',
       action: 'startTranscriptionJob',
       parameters: {
-        TranscriptionJobName: JsonPath.uuid(),
+        TranscriptionJobName: JsonPath.stringAt('$.job_id'),
         Media: { MediaFileUri: JsonPath.stringAt('$.media_file_uri') },
         LanguageCode: this.node.tryGetContext('makeops/transcribe-locale'),
-        OutputBucketName: transcribeResultBucket.bucketName
+        OutputBucketName: transcribeResultBucket.bucketName,
+        OutputKey: JsonPath.stringAt('$.output_key')
       },
       iamResources: ['*']
     })

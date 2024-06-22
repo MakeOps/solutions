@@ -21,6 +21,8 @@ def store_file_upload_info(tenant, metadata):
     uploadTable.put_item(
       Item={
         'pk': f't-{tenant}',
+        'sk': metadata['job_id'],
+        'size': metadata['size'],
         'status': 'started',
         'event_time': metadata['event_time'],
         'job_id': metadata['job_id']
@@ -36,19 +38,23 @@ def handle_file_record(record: dict):
 
     media_file_uri = f's3://{bucket_name}/{object_key}'
     tenant = [part for part in object_key.split('/') if 'tenant' in part][0].split('=', 2)[1]
-    job_id = f't-{uuid.uuid4().hex}'
+    job_id = f'j-{uuid.uuid4().hex}'
 
     print(f'Trigger Step Function tenant={tenant} media_file_uri={media_file_uri}')
 
     payload = {
         'tenant': tenant,
         'media_file_uri': media_file_uri,
-        'unique_id': job_id
+        'job_id': job_id,
+        'output_key': os.path.dirname(object_key)
     }
+
+    print(payload)
 
     store_file_upload_info(tenant, {
       'event_time': record['eventTime'],
-      'job_id': job_id
+      'job_id': job_id,
+      'size': record['s3']['object']['size']
     })
 
     res = sfn.start_execution(
@@ -59,7 +65,8 @@ def handle_file_record(record: dict):
     return {
         'execution_arn': res['executionArn'],
         'start_date': res['startDate'].isoformat(),
-        'media_file_uri': media_file_uri
+        'media_file_uri': media_file_uri,
+        'job_id': job_id
     }
 
 
