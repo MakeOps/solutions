@@ -1,4 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
+import { AttributeType, Table } from 'aws-cdk-lib/aws-dynamodb';
 import { Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { DockerImageCode, DockerImageFunction } from 'aws-cdk-lib/aws-lambda';
 import { Bucket, EventType } from 'aws-cdk-lib/aws-s3';
@@ -21,6 +22,12 @@ export class SimpleAudioVideoTranscriptionOnAwsStack extends cdk.Stack {
     // Create a new role to provide permissions to our step function file process
     const transcribeProcessorRole = new Role(this, 'TranscribeProcessorRole', {
       assumedBy: new ServicePrincipal('states.amazonaws.com')
+    })
+
+    // Create a DynamoDB table for storing the uploaded file metadata
+    const fileUploadsTable = new Table(this, 'FileUploadTable', {
+      partitionKey: { name: 'pk', type: AttributeType.STRING },
+      sortKey: { name: 'sk', type: AttributeType.STRING }
     })
 
     // Grant appropriate permissions to the role to perform file operations on the buckets
@@ -57,12 +64,16 @@ export class SimpleAudioVideoTranscriptionOnAwsStack extends cdk.Stack {
       code: DockerImageCode.fromImageAsset(join(__dirname, 'code')),
       memorySize: 1024,
       environment: {
-        'STATE_MACHINE_ARN': uploadProcessorSfn.stateMachineArn
+        'STATE_MACHINE_ARN': uploadProcessorSfn.stateMachineArn,
+        'DDB_TABLE': fileUploadsTable.tableName
       }
     })
 
     // Grant permission for the upload lambda to execute the step function
     uploadProcessorSfn.grantStartExecution(uploadHandlerFunc)
+
+    // Grant permission for the upload lambda to store file metadata
+    fileUploadsTable.grantWriteData(uploadHandlerFunc)
 
     // Connect the Amazon S3 notification to trigger the lambda function
     uploadBucket.addEventNotification(EventType.OBJECT_CREATED, new LambdaDestination(uploadHandlerFunc), {

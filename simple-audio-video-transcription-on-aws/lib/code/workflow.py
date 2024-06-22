@@ -7,8 +7,25 @@ from urllib.parse import unquote
 
 
 STATE_MACHINE_ARN = os.environ.get('STATE_MACHINE_ARN')
+DDB_TABLE = os.environ.get('DDB_TABLE')
 
 sfn = boto3.client('stepfunctions')
+ddb = boto3.resource('dynamodb')
+
+uploadTable = ddb.Table(DDB_TABLE)
+
+
+def store_file_upload_info(tenant, metadata):
+    '''Store the uploaded file info'''
+
+    uploadTable.put_item(
+      Item={
+        'pk': f't-{tenant}',
+        'status': 'started',
+        'event_time': metadata['event_time'],
+        'job_id': metadata['job_id']
+      }
+    )
 
 
 def handle_file_record(record: dict):
@@ -19,14 +36,20 @@ def handle_file_record(record: dict):
 
     media_file_uri = f's3://{bucket_name}/{object_key}'
     tenant = [part for part in object_key.split('/') if 'tenant' in part][0].split('=', 2)[1]
+    job_id = f't-{uuid.uuid4().hex}'
 
     print(f'Trigger Step Function tenant={tenant} media_file_uri={media_file_uri}')
 
     payload = {
         'tenant': tenant,
         'media_file_uri': media_file_uri,
-        'unique_id': f't-{uuid.uuid4().hex}'
+        'unique_id': job_id
     }
+
+    store_file_upload_info(tenant, {
+      'event_time': record['eventTime'],
+      'job_id': job_id
+    })
 
     res = sfn.start_execution(
         stateMachineArn=STATE_MACHINE_ARN,

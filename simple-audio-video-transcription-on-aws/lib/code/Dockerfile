@@ -12,4 +12,4 @@ COPY . .
 
 ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
-CMD ["workflow.trigger_handler"]
+CMD ["workflow.handle_event"]
